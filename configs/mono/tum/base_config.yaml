@@ -40,7 +40,7 @@ Training:
   kf_overlap: 0.9
   kf_cutoff: 0.3
   prune_mode: 'slam'
-  single_thread: False
+  single_thread: False #自动采用多线程？？？
   spherical_harmonics: False
 
   lr:

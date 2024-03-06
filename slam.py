@@ -23,7 +23,7 @@ from utils.slam_frontend import FrontEnd
 
 
 class SLAM:
-    def __init__(self, config, save_dir=None):
+    def __init__(self, config, save_dir=None): #类的初始化（构造）函数
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)
 
@@ -201,8 +201,8 @@ class SLAM:
 if __name__ == "__main__":
     # Set up command line argument parser
     parser = ArgumentParser(description="Training script parameters")
-    parser.add_argument("--config", type=str)
-    parser.add_argument("--eval", action="store_true")
+    parser.add_argument("--config", type=str) #读入config文件
+    parser.add_argument("--eval", action="store_true") #直接进行评估
 
     args = parser.parse_args(sys.argv[1:])
 
@@ -211,10 +211,10 @@ if __name__ == "__main__":
     with open(args.config, "r") as yml:
         config = yaml.safe_load(yml)
 
-    config = load_config(args.config)
+    config = load_config(args.config) #读入config文件
     save_dir = None
 
-    if args.eval:
+    if args.eval: #如果输入了--eval参数
         Log("Running MonoGS in Evaluation Mode")
         Log("Following config will be overriden")
         Log("\tsave_results=True")
@@ -227,31 +227,34 @@ if __name__ == "__main__":
         config["Results"]["use_wandb"] = True
 
     if config["Results"]["save_results"]:
-        mkdir_p(config["Results"]["save_dir"])
-        current_datetime = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        path = config["Dataset"]["dataset_path"].split("/")
-        save_dir = os.path.join(
+        mkdir_p(config["Results"]["save_dir"]) #就创建一个目录，该目录的路径在配置文件中指定。
+        current_datetime = datetime.now().strftime("%Y-%m-%d-%H-%M-%S") #获取当前的日期和时间，并将其格式化为字符串。
+        path = config["Dataset"]["dataset_path"].split("/") #将数据集路径按照"/"进行分割
+        save_dir = os.path.join( #将数据集路径的最后三个部分和当前的日期和时间拼接在一起，作为保存结果的目录。
             config["Results"]["save_dir"], path[-3] + "_" + path[-2], current_datetime
         )
         tmp = args.config
-        tmp = tmp.split(".")[0]
-        config["Results"]["save_dir"] = save_dir
+        tmp = tmp.split(".")[0] #将文件名（args.config）中的扩展名去除。
+        config["Results"]["save_dir"] = save_dir #更新配置文件中保存结果的目录路径。
         mkdir_p(save_dir)
         with open(os.path.join(save_dir, "config.yml"), "w") as file:
             documents = yaml.dump(config, file)
         Log("saving results in " + save_dir)
+        # 初始化WandB（Weights and Biases）的运行环境，用于跟踪实验结果。
         run = wandb.init(
             project="MonoGS",
             name=f"{tmp}_{current_datetime}",
             config=config,
             mode=None if config["Results"]["use_wandb"] else "disabled",
         )
+        # 定义了两个指标，用于在WandB上跟踪实验的进展。
         wandb.define_metric("frame_idx")
         wandb.define_metric("ate*", step_metric="frame_idx")
 
+    # 初始化SLAM对象，传入了配置和保存结果的目录路径。
     slam = SLAM(config, save_dir=save_dir)
 
-    slam.run()
+    slam.run() #开始运行
     wandb.finish()
 
     # All done

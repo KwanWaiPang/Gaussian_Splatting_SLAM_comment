@@ -24,13 +24,16 @@ from utils.slam_frontend import FrontEnd
 
 class SLAM:
     def __init__(self, config, save_dir=None): #类的初始化（构造）函数
-        start = torch.cuda.Event(enable_timing=True)
-        end = torch.cuda.Event(enable_timing=True)
+        start = torch.cuda.Event(enable_timing=True) #创建了一个CUDA事件对象 start，用于记录开始时间。
+        end = torch.cuda.Event(enable_timing=True) #创建了一个CUDA事件对象 end，用于记录结束时间。
 
-        start.record()
+        start.record() #记录开始时间
 
-        self.config = config
-        self.save_dir = save_dir
+        self.config = config #获取配置文件
+        self.save_dir = save_dir #获取保存结果的目录路径
+
+        # 将 config 中的参数转换为 model_params、opt_params 和 pipeline_params 三个对象，并保存在类属性中。
+        # 通过munchify 函数将 config["model_params"] 这个字典转换为了一个 munch 对象，这样可以更方便地访问其中的参数
         model_params = munchify(config["model_params"])
         opt_params = munchify(config["opt_params"])
         pipeline_params = munchify(config["pipeline_params"])

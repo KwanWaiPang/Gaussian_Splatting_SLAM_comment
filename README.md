@@ -7,17 +7,17 @@
   <h1 align="center"> Gaussian Splatting SLAM (中文注释版~仅供个人学习记录用)
   </h1>
   <p align="center">
-    <a href="https://muskie82.github.io/"><strong>*Hidenobu Matsuki</strong></a>
+    <!-- <a href="https://muskie82.github.io/"><strong>*Hidenobu Matsuki</strong></a>
     ·
     <a href="https://rmurai.co.uk/"><strong>*Riku Murai</strong></a>
     ·
     <a href="https://www.imperial.ac.uk/people/p.kelly/"><strong>Paul H.J. Kelly</strong></a>
     ·
-    <a href="https://www.doc.ic.ac.uk/~ajd/"><strong>Andrew J. Davison</strong></a>
+    <a href="https://www.doc.ic.ac.uk/~ajd/"><strong>Andrew J. Davison</strong></a> -->
   </p>
-  <p align="center">(* Equal Contribution)</p>
+  <!-- <p align="center">(* Equal Contribution)</p> -->
 
-  <h3 align="center"> CVPR 2024</h3>
+  <!-- <h3 align="center"> CVPR 2024</h3> -->
 
 
 

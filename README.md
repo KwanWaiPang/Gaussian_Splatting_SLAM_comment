@@ -4,7 +4,7 @@
 
 <p align="center">
 
-  <h1 align="center"> Gaussian Splatting SLAM
+  <h1 align="center"> Gaussian Splatting SLAM (中文注释版~仅供个人学习记录用)
   </h1>
   <p align="center">
     <a href="https://muskie82.github.io/"><strong>*Hidenobu Matsuki</strong></a>

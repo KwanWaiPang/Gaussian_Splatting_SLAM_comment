@@ -22,7 +22,7 @@
 
 
 [comment]: <> (  <h2 align="center">PAPER</h2>)
-  <h3 align="center"><a href="https://arxiv.org/abs/2312.06741">Paper</a> | <a href="https://youtu.be/x604ghp9R_Q?si=nYoWr8h2Xh-6L_KN">Video</a> | <a href="https://rmurai.co.uk/projects/GaussianSplattingSLAM/">Project Page</a> | <a href="https://github.com/muskie82/MonoGS">Origin Github Page</a></h3>
+  <h3 align="center"><a href="https://arxiv.org/abs/2312.06741">Paper</a> | <a href="https://youtu.be/x604ghp9R_Q?si=nYoWr8h2Xh-6L_KN">Video</a> | <a href="https://rmurai.co.uk/projects/GaussianSplattingSLAM/">Project Page</a> | <a href="https://github.com/muskie82/MonoGS">Original Github Page</a></h3>
   <div align="center"></div>
 
 <p align="center">

@@ -4,7 +4,7 @@ Results:
   save_trj: True
   save_trj_kf_intv: 10
   use_gui: True
-  eval_rendering: False
+  eval_rendering: False  #（更改为true查看渲染的性能）
   use_wandb: False
 
 Dataset:

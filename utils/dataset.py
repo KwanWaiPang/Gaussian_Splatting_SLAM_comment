@@ -396,10 +396,10 @@ class TUMDataset(MonocularDataset):
         super().__init__(args, path, config)
         dataset_path = config["Dataset"]["dataset_path"]
         parser = TUMParser(dataset_path)
-        self.num_imgs = parser.n_img
-        self.color_paths = parser.color_paths
-        self.depth_paths = parser.depth_paths
-        self.poses = parser.poses
+        self.num_imgs = parser.n_img #图像数量
+        self.color_paths = parser.color_paths #彩色图
+        self.depth_paths = parser.depth_paths #深度图
+        self.poses = parser.poses #pose信息
 
 
 class ReplicaDataset(MonocularDataset):

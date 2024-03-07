@@ -313,6 +313,7 @@ class FrontEnd(mp.Process):
         self.backend_queue.put(msg)
         self.requested_init = True
 
+    # 这个方法将传递的数据中的高斯模型、可见性信息和关键帧信息分别赋值给前端的对应属性。然后遍历关键帧信息列表，对于每个关键帧，更新相应的相机参数。
     def sync_backend(self, data):
         self.gaussians = data[1]
         occ_aware_visibility = data[2]
@@ -521,7 +522,7 @@ class FrontEnd(mp.Process):
 
                 # 如果数据的第一个元素是 "sync_backend"，则执行以下操作：
                 if data[0] == "sync_backend":
-                    self.sync_backend(data)
+                    self.sync_backend(data) #调用 sync_backend 方法，将获取到的数据作为参数传递给该方法。
 
                 elif data[0] == "keyframe":
                     self.sync_backend(data)

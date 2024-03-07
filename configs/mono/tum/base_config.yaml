@@ -10,10 +10,10 @@ Results:
 Dataset:
   type: 'tum'
   sensor_type: 'monocular'
-  pcd_downsample: 64
-  pcd_downsample_init: 32
-  adaptive_pointsize: True
-  point_size: 0.01
+  pcd_downsample: 64  #非初始化的时候点云的下采样
+  pcd_downsample_init: 32 #初始化时的点云下采样
+  adaptive_pointsize: True  #是否自适应调整点云的大小 （根据深度图像的中值）
+  point_size: 0.01 #点云的大小
 
 Training:
   init_itr_num: 1050
@@ -22,7 +22,7 @@ Training:
   init_gaussian_th: 0.005
   init_gaussian_extent: 30
   tracking_itr_num: 100
-  mapping_itr_num: 150
+  mapping_itr_num: 150 #建图迭代次数
   gaussian_update_every: 150
   gaussian_update_offset: 50
   gaussian_th: 0.7
@@ -31,7 +31,7 @@ Training:
   size_threshold: 20
   kf_interval: 5 # 计算当前帧与上一个关键帧之间的时间间隔(关键帧间隔)
   window_size: 8
-  pose_window: 3
+  pose_window: 3 # 用于优化的位姿窗口大小
   edge_threshold: 1.1
   rgb_boundary_threshold: 0.01 #rgb的边界阈值
 

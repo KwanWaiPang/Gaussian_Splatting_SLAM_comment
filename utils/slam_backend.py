@@ -48,7 +48,7 @@ class BackEnd(mp.Process):
         self.init_gaussian_extent = (
             self.cameras_extent * self.config["Training"]["init_gaussian_extent"]
         )
-        self.mapping_itr_num = self.config["Training"]["mapping_itr_num"]
+        self.mapping_itr_num = self.config["Training"]["mapping_itr_num"]  #建图迭代次数
         self.gaussian_update_every = self.config["Training"]["gaussian_update_every"]
         self.gaussian_update_offset = self.config["Training"]["gaussian_update_offset"]
         self.gaussian_th = self.config["Training"]["gaussian_th"]
@@ -65,7 +65,7 @@ class BackEnd(mp.Process):
         )
 
     def add_next_kf(self, frame_idx, viewpoint, init=False, scale=2.0, depth_map=None):
-        self.gaussians.extend_from_pcd_seq(
+        self.gaussians.extend_from_pcd_seq(#从点云序列中扩展高斯模型
             viewpoint, kf_id=frame_idx, init=init, scale=scale, depthmap=depth_map
         )
 
@@ -140,22 +140,27 @@ class BackEnd(mp.Process):
         return render_pkg
 
     def map(self, current_window, prune=False, iters=1):
+
+        # 首先，检查当前窗口是否为空，如果为空则直接返回，不进行后续操作。
         if len(current_window) == 0:
             return
 
+        # 根据当前窗口中的关键帧索引，从 self.viewpoints 中获取对应的视角（从数据集中读取的全部信息、图像、gt pose等），并将它们存储在 viewpoint_stack 中。
         viewpoint_stack = [self.viewpoints[kf_idx] for kf_idx in current_window]
-        random_viewpoint_stack = []
-        frames_to_optimize = self.config["Training"]["pose_window"]
+        random_viewpoint_stack = [] #初始化一个空列表 random_viewpoint_stack，用于存储不在当前窗口中的视角。
+        frames_to_optimize = self.config["Training"]["pose_window"] #获取需要优化的帧数
 
-        current_window_set = set(current_window)
+        # 遍历所有视角，如果视角不在当前窗口中，则将其添加到 random_viewpoint_stack 中。
+        current_window_set = set(current_window) #创建了一个集合（set），其中包含了 current_window 列表中的所有元素。集合是一种无序且不重复的数据结构，
         for cam_idx, viewpoint in self.viewpoints.items():
             if cam_idx in current_window_set:
                 continue
             random_viewpoint_stack.append(viewpoint)
 
+        # 建图迭代次数多少代就多少次。（mapping_itr_num）
         for _ in range(iters):
-            self.iteration_count += 1
-            self.last_sent += 1
+            self.iteration_count += 1 #跟踪迭代次数
+            self.last_sent += 1 #跟踪发送次数
 
             loss_mapping = 0
             viewspace_point_tensor_acm = []
@@ -165,12 +170,15 @@ class BackEnd(mp.Process):
 
             keyframes_opt = []
 
+            # 遍历当前窗口中的所有关键帧，对每一帧进行建图。
             for cam_idx in range(len(current_window)):
-                viewpoint = viewpoint_stack[cam_idx]
-                keyframes_opt.append(viewpoint)
+                viewpoint = viewpoint_stack[cam_idx] #获取该相机的视角信息 viewpoint。
+                keyframes_opt.append(viewpoint) #将 viewpoint 添加到 keyframes_opt 列表中
+                # 调用 render 函数来渲染场景，其中传入了当前相机的信息 viewpoint、高斯模型数据 self.gaussians、管道参数 self.pipeline_params 和背景信息 self.background。渲染完成后，将渲染结果存储在 render_pkg 变量中。
                 render_pkg = render(
                     viewpoint, self.gaussians, self.pipeline_params, self.background
                 )
+                # 将提取出的渲染结果分别赋值给对应的变量，包括图像、视角点、可见性、半径、深度、不透明度和触摸数等信息。
                 (
                     image,
                     viewspace_point_tensor,
@@ -314,7 +322,7 @@ class BackEnd(mp.Process):
                     viewpoint = viewpoint_stack[cam_idx]
                     if viewpoint.uid == 0:
                         continue
-                    update_pose(viewpoint)
+                    update_pose(viewpoint) #更新相机位姿
         return gaussian_split
 
     def color_refinement(self):
@@ -366,17 +374,23 @@ class BackEnd(mp.Process):
 
     def run(self): #开启后端进程
         while True:
-            if self.backend_queue.empty():
+            if self.backend_queue.empty(): #如果后端队列为空
+                #如果系统处于暂停状态，则休眠一段时间并继续下一次循环。
                 if self.pause:
                     time.sleep(0.01)
-                    continue
+                    continue 
+
+                # 如果当前窗口中没有关键帧，则休眠一段时间并继续下一次循环。
                 if len(self.current_window) == 0:
                     time.sleep(0.01)
                     continue
-
+                
+                # 如果是单线程模式，则休眠一段时间并继续下一次循环。
                 if self.single_thread:
                     time.sleep(0.01)
                     continue
+                
+                #进行建图 
                 self.map(self.current_window)
                 if self.last_sent >= 10:
                     self.map(self.current_window, prune=True, iters=10)
@@ -401,7 +415,7 @@ class BackEnd(mp.Process):
                     self.reset()
 
                     self.viewpoints[cur_frame_idx] = viewpoint
-                    self.add_next_kf(
+                    self.add_next_kf(#添加关键帧，此处进行高斯的初始化
                         cur_frame_idx, viewpoint, depth_map=depth_map, init=True
                     )
                     self.initialize_map(cur_frame_idx, viewpoint)
@@ -431,7 +445,7 @@ class BackEnd(mp.Process):
                             iter_per_kf = 50 if self.live_mode else 300
                             Log("Performing initial BA for initialization")
                         else:
-                            iter_per_kf = self.mapping_itr_num
+                            iter_per_kf = self.mapping_itr_num  #建图迭代次数
                     for cam_idx in range(len(self.current_window)):
                         if self.current_window[cam_idx] == 0:
                             continue

@@ -141,7 +141,7 @@ class SLAM:
         FPS = N_frames / total_time #计算了帧率，单位是帧/秒。
         Log("Total time", start.elapsed_time(end) * 0.001, tag="Eval")
         Log("Total FPS", N_frames / (start.elapsed_time(end) * 0.001), tag="Eval")
-        # 打印到终端查看（感觉运行的实时性较差~）
+        # 打印到终端查看（感觉运行的实时性较差~此处输出的是全部的时间~）
         print("Total time:", total_time, "seconds")
         print("Total FPS:", FPS)
 

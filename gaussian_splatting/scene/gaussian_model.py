@@ -64,7 +64,8 @@ class GaussianModel:
         self.ply_input = None
 
         self.isotropic = False
-
+    
+    # 从尺度以及旋转构建协方差
     def build_covariance_from_scaling_rotation(
         self, scaling, scaling_modifier, rotation
     ):
@@ -105,47 +106,57 @@ class GaussianModel:
             self.active_sh_degree += 1
 
     def create_pcd_from_image(self, cam_info, init=False, scale=2.0, depthmap=None):
-        cam = cam_info
+        cam = cam_info #相机信息，包含曝光、原始图像和深度信息等。
+        # 根据相机曝光参数对原始图像进行曝光校正。
         image_ab = (torch.exp(cam.exposure_a)) * cam.original_image + cam.exposure_b
+        # 将校正后的图像进行范围限制，确保其值在 [0, 1] 范围内。
         image_ab = torch.clamp(image_ab, 0.0, 1.0)
+        # 将校正后的图像转换为 numpy 数组，便于后续处理。
         rgb_raw = (image_ab * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy()
 
+        # 检查是否提供了深度图像。
         if depthmap is not None:
+            # 将 RGB 图像数据转换为 Open3D 图像对象。
             rgb = o3d.geometry.Image(rgb_raw.astype(np.uint8))
+            # 将深度图像数据转换为 Open3D 图像对象。
             depth = o3d.geometry.Image(depthmap.astype(np.float32))
-        else:
-            depth_raw = cam.depth
-            if depth_raw is None:
+        else: #如果没有提供深度图像，则执行以下操作：
+            depth_raw = cam.depth #获取相机的深度信息。
+            if depth_raw is None: #如果深度信息为空，则创建一个空的深度图像。
                 depth_raw = np.empty((cam.image_height, cam.image_width))
 
+            # 检查数据集的传感器类型是否为单目相机：
             if self.config["Dataset"]["sensor_type"] == "monocular":
+                # 如果是单目相机，则通过随机生成的深度值创建深度图像，并将其缩放。
                 depth_raw = (
                     np.ones_like(depth_raw)
                     + (np.random.randn(depth_raw.shape[0], depth_raw.shape[1]) - 0.5)
                     * 0.05
                 ) * scale
-
+            # 将 RGB 图像数据转换为 Open3D 图像对象。
             rgb = o3d.geometry.Image(rgb_raw.astype(np.uint8))
+            # 将深度图像数据转换为 Open3D 图像对象。
             depth = o3d.geometry.Image(depth_raw.astype(np.float32))
-
+        
+        # 调用函数create_pcd_from_image_and_depth
         return self.create_pcd_from_image_and_depth(cam, rgb, depth, init)
 
     def create_pcd_from_image_and_depth(self, cam, rgb, depth, init=False):
-        if init:
-            downsample_factor = self.config["Dataset"]["pcd_downsample_init"]
+        if init: #如果需要进行初始化，则执行以下操作
+            downsample_factor = self.config["Dataset"]["pcd_downsample_init"] #获取初始化时的下采样因子。
         else:
-            downsample_factor = self.config["Dataset"]["pcd_downsample"]
-        point_size = self.config["Dataset"]["point_size"]
+            downsample_factor = self.config["Dataset"]["pcd_downsample"] #获取下采样因子。
+        point_size = self.config["Dataset"]["point_size"] #获取点的大小。应该是点之间的间距？
         if "adaptive_pointsize" in self.config["Dataset"]:
             if self.config["Dataset"]["adaptive_pointsize"]:
-                point_size = min(0.05, point_size * np.median(depth))
+                point_size = min(0.05, point_size * np.median(depth)) #根据深度图像的中值调整点的大小。
         rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
             rgb,
             depth,
             depth_scale=1.0,
             depth_trunc=100.0,
             convert_rgb_to_intensity=False,
-        )
+        ) #根据RGB图像和深度图像创建 Open3D 的 RGBD 图像对象。
 
         W2C = getWorld2View2(cam.R, cam.T).cpu().numpy()
         pcd_tmp = o3d.geometry.PointCloud.create_from_rgbd_image(
@@ -232,12 +243,20 @@ class GaussianModel:
             new_n_obs=new_n_obs,
         )
 
+    # 从点云数据序列中扩展高斯模型
     def extend_from_pcd_seq(
-        self, cam_info, kf_id=-1, init=False, scale=2.0, depthmap=None
+        self, 
+        cam_info, #相机信息，用于创建点云
+        kf_id=-1,  #关键帧的标识符，默认为-1。
+        init=False, #一个布尔值，指示是否进行初始化，默认为False。
+        scale=2.0,  #缩放因子，默认为2.0。
+        depthmap=None #度图像，可选参数，默认为None。
     ):
+        #调用方法create_pcd_from_image
         fused_point_cloud, features, scales, rots, opacities = (
             self.create_pcd_from_image(cam_info, init, scale=scale, depthmap=depthmap)
-        )
+        )#返回了融合的点云、特征、缩放、旋转和不透明度。
+        # 调用了另一个方法 extend_from_pcd，以融合的点云、特征、缩放、旋转、不透明度和关键帧标识符作为参数。
         self.extend_from_pcd(
             fused_point_cloud, features, scales, rots, opacities, kf_id
         )

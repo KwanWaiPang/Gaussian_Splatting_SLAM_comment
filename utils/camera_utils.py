@@ -35,7 +35,7 @@ class Camera(nn.Module):
 
         self.original_image = color
         self.depth = depth
-        self.grad_mask = None
+        self.grad_mask = None #梯度掩码
 
         self.fx = fx
         self.fy = fy
@@ -111,16 +111,21 @@ class Camera(nn.Module):
         self.R = R.to(device=self.device)
         self.T = t.to(device=self.device)
 
-    def compute_grad_mask(self, config):
-        edge_threshold = config["Training"]["edge_threshold"]
+    def compute_grad_mask(self, config): #计算梯度掩码，用于在图像中确定边缘区域
+        edge_threshold = config["Training"]["edge_threshold"] #从配置中获取边缘阈值，这个阈值用于确定梯度的强度，超过阈值的部分将被视为边缘。
 
+        # 将原始图像转换为灰度图像。这里使用了 mean 函数对所有通道进行平均，dim=0 表示对通道维度进行平均，keepdim=True 保持维度的数量。
         gray_img = self.original_image.mean(dim=0, keepdim=True)
+        # 计算灰度图像的垂直和水平方向的梯度。
         gray_grad_v, gray_grad_h = image_gradient(gray_img)
+        # 根据灰度图像生成垂直和水平梯度的掩码。掩码的作用是在计算梯度时过滤掉图像中不需要考虑的部分，例如图像边缘。
         mask_v, mask_h = image_gradient_mask(gray_img)
         gray_grad_v = gray_grad_v * mask_v
         gray_grad_h = gray_grad_h * mask_h
         img_grad_intensity = torch.sqrt(gray_grad_v**2 + gray_grad_h**2)
+        # 计算梯度的强度，通过对垂直和水平方向的梯度分量进行平方并求和，然后取平方根得到。
 
+        # 如果数据集类型是 "replica"，则将图像分成多个块，并计算每个块的梯度强度的中位数。然后根据中位数和阈值乘数，将梯度强度大于阈值的部分置为1，否则置为0。
         if config["Dataset"]["type"] == "replica":
             row, col = 32, 32
             multiplier = edge_threshold
@@ -136,7 +141,7 @@ class Camera(nn.Module):
                     block[block > (th_median * multiplier)] = 1
                     block[block <= (th_median * multiplier)] = 0
             self.grad_mask = img_grad_intensity
-        else:
+        else: #如果不是 "replica" 类型的数据集，则计算整个图像的梯度强度中位数，并将梯度强度大于阈值的部分设为 True，否则为 False。
             median_img_grad_intensity = img_grad_intensity.median()
             self.grad_mask = (
                 img_grad_intensity > median_img_grad_intensity * edge_threshold

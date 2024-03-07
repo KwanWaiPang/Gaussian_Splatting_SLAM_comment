@@ -314,7 +314,8 @@ class FrontEnd(mp.Process):
             torch.cuda.empty_cache()
 
     def run(self):
-        cur_frame_idx = 0
+        cur_frame_idx = 0 #初始化当前帧的索引为 0
+        # 获取投影矩阵（三维点到像素坐标系上）
         projection_matrix = getProjectionMatrix2(
             znear=0.01,
             zfar=100.0,
@@ -325,26 +326,26 @@ class FrontEnd(mp.Process):
             W=self.dataset.width,
             H=self.dataset.height,
         ).transpose(0, 1)
-        projection_matrix = projection_matrix.to(device=self.device)
+        projection_matrix = projection_matrix.to(device=self.device) #将投影矩阵转移到GPU上
         tic = torch.cuda.Event(enable_timing=True)
         toc = torch.cuda.Event(enable_timing=True)
 
         while True:
-            if self.q_vis2main.empty():
+            if self.q_vis2main.empty(): #如果gui队列为空
                 if self.pause:
                     continue
             else:
                 data_vis2main = self.q_vis2main.get()
                 self.pause = data_vis2main.flag_pause
                 if self.pause:
-                    self.backend_queue.put(["pause"])
+                    self.backend_queue.put(["pause"]) #如果gui暂停了，那么就通知后端暂停
                     continue
                 else:
                     self.backend_queue.put(["unpause"])
 
-            if self.frontend_queue.empty():
-                tic.record()
-                if cur_frame_idx >= len(self.dataset):
+            if self.frontend_queue.empty(): #如果前端队列为空
+                tic.record() #记录当前时间，用于计算处理时间。
+                if cur_frame_idx >= len(self.dataset): #如果当前帧的索引大于数据集的长度，也就是遍历完了~
                     if self.save_results:
                         eval_ate(
                             self.cameras,
@@ -359,22 +360,26 @@ class FrontEnd(mp.Process):
                         )
                     break
 
-                if self.requested_init:
+                #检查是否有初始化请求
+                if self.requested_init: 
                     time.sleep(0.01)
                     continue
-
+                
+                # 检查是否处于单线程模式且有请求的关键帧。
                 if self.single_thread and self.requested_keyframe > 0:
                     time.sleep(0.01)
                     continue
-
+                
+                # 检查是否未初始化且有请求的关键帧。
                 if not self.initialized and self.requested_keyframe > 0:
                     time.sleep(0.01)
                     continue
-
+                
+                #从数据集中获取当前帧的图像、深度图和位姿等数据(viewpoint)。 
                 viewpoint = Camera.init_from_dataset(
                     self.dataset, cur_frame_idx, projection_matrix
                 )
-                viewpoint.compute_grad_mask(self.config)
+                viewpoint.compute_grad_mask(self.config) #计算梯度掩码
 
                 self.cameras[cur_frame_idx] = viewpoint
 

@@ -17,9 +17,9 @@ import torch
 
 
 class BasicPointCloud(NamedTuple):
-    points: np.array
-    colors: np.array
-    normals: np.array
+    points: np.array #点的坐标
+    colors: np.array #点的颜色
+    normals: np.array #点的法向量
 
 
 def getWorld2View(R, t):

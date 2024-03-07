@@ -61,7 +61,7 @@ class GaussianModel:
         self.rotation_activation = torch.nn.functional.normalize
 
         self.config = config
-        self.ply_input = None
+        self.ply_input = None #输入的点云数据，在create_pcd_from_image_and_depth函数中被赋值。
 
         self.isotropic = False
     
@@ -158,7 +158,10 @@ class GaussianModel:
             convert_rgb_to_intensity=False,
         ) #根据RGB图像和深度图像创建 Open3D 的 RGBD 图像对象。
 
+        # 获取相机的世界坐标系到相机坐标系的转换矩阵，并将其转换为NumPy数组。
         W2C = getWorld2View2(cam.R, cam.T).cpu().numpy()
+
+        # 基于 RGBD 图像创建点云，并应用相机内外参数。
         pcd_tmp = o3d.geometry.PointCloud.create_from_rgbd_image(
             rgbd,
             o3d.camera.PinholeCameraIntrinsic(
@@ -172,25 +175,32 @@ class GaussianModel:
             extrinsic=W2C,
             project_valid_depth_only=True,
         )
+
+        # 对点云进行随机下采样。
         pcd_tmp = pcd_tmp.random_down_sample(1.0 / downsample_factor)
+        # 获取点云的坐标和颜色信息。
         new_xyz = np.asarray(pcd_tmp.points)
         new_rgb = np.asarray(pcd_tmp.colors)
 
+        # 创建一个基本的点云对象。
         pcd = BasicPointCloud(
             points=new_xyz, colors=new_rgb, normals=np.zeros((new_xyz.shape[0], 3))
         )
         self.ply_input = pcd
 
+        # 将点云的点坐标转换为 PyTorch 张量，并移到GPU上。
         fused_point_cloud = torch.from_numpy(np.asarray(pcd.points)).float().cuda()
+        # 将点云的颜色信息转换为 PyTorch 张量，然后再转成sh系数，并移到GPU上。
         fused_color = RGB2SH(torch.from_numpy(np.asarray(pcd.colors)).float().cuda())
         features = (
             torch.zeros((fused_color.shape[0], 3, (self.max_sh_degree + 1) ** 2))
             .float()
             .cuda()
-        )
+        )#初始化点云的特征表示。
         features[:, :3, 0] = fused_color
         features[:, 3:, 1:] = 0.0
 
+        # 根据点与相机之间的距离计算尺度。
         dist2 = (
             torch.clamp_min(
                 distCUDA2(torch.from_numpy(np.asarray(pcd.points)).float().cuda()),
@@ -199,11 +209,13 @@ class GaussianModel:
             * point_size
         )
         scales = torch.log(torch.sqrt(dist2))[..., None]
-        if not self.isotropic:
+        if not self.isotropic: #如果不是各向同性，则将尺度复制到每个颜色通道。
             scales = scales.repeat(1, 3)
 
+        # 初始化旋转矩阵。
         rots = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
         rots[:, 0] = 1
+        # 初始化不透明度。
         opacities = inverse_sigmoid(
             0.5
             * torch.ones(
@@ -219,19 +231,25 @@ class GaussianModel:
     def extend_from_pcd(
         self, fused_point_cloud, features, scales, rots, opacities, kf_id
     ):
+        # 将点云数据转换为可训练的参数，并标记为需要梯度计算。
         new_xyz = nn.Parameter(fused_point_cloud.requires_grad_(True))
+        # 将点云的特征表示拆分为直流分量和余弦分量，并转换为可训练的参数，并标记为需要梯度计算。
         new_features_dc = nn.Parameter(
             features[:, :, 0:1].transpose(1, 2).contiguous().requires_grad_(True)
         )
         new_features_rest = nn.Parameter(
             features[:, :, 1:].transpose(1, 2).contiguous().requires_grad_(True)
         )
+        # 将尺度、旋转和不透明度转换为可训练的参数，并标记为需要梯度计算。
         new_scaling = nn.Parameter(scales.requires_grad_(True))
         new_rotation = nn.Parameter(rots.requires_grad_(True))
         new_opacity = nn.Parameter(opacities.requires_grad_(True))
 
+        # 创建一个张量，其长度与点云中点的数量相同，每个点对应于关键帧ID。
         new_unique_kfIDs = torch.ones((new_xyz.shape[0])).int() * kf_id
+        # 创建一个张量，其长度与点云中点的数量相同，用于记录每个点的观测次数。
         new_n_obs = torch.zeros((new_xyz.shape[0])).int()
+        # 调用 densification_postfix 方法，将新的3D高斯点数据添加到地图中。
         self.densification_postfix(
             new_xyz,
             new_features_dc,
@@ -584,6 +602,7 @@ class GaussianModel:
         new_kf_ids=None,
         new_n_obs=None,
     ):
+        # 创建字典 d，将输入的张量按键值对的形式存储在字典中。
         d = {
             "xyz": new_xyz,
             "f_dc": new_features_dc,
@@ -593,6 +612,7 @@ class GaussianModel:
             "rotation": new_rotation,
         }
 
+        # 调用 cat_tensors_to_optimizer 方法将字典中的张量连接到一个优化器可优化的张量中。
         optimizable_tensors = self.cat_tensors_to_optimizer(d)
         self._xyz = optimizable_tensors["xyz"]
         self._features_dc = optimizable_tensors["f_dc"]
@@ -601,6 +621,7 @@ class GaussianModel:
         self._scaling = optimizable_tensors["scaling"]
         self._rotation = optimizable_tensors["rotation"]
 
+        # 初始化一些辅助张量
         self.xyz_gradient_accum = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
         self.denom = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
         self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")

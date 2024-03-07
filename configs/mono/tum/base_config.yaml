@@ -33,7 +33,7 @@ Training:
   window_size: 8
   pose_window: 3
   edge_threshold: 1.1
-  rgb_boundary_threshold: 0.01
+  rgb_boundary_threshold: 0.01 #rgb的边界阈值
 
   kf_translation: 0.08
   kf_min_translation: 0.05

@@ -33,13 +33,13 @@ class FrontEnd(mp.Process):
         self.occ_aware_visibility = {}
         self.current_window = []
 
-        self.reset = True
+        self.reset = True #系统是否要重置，初始化后设置为 False。
         self.requested_init = False
         self.requested_keyframe = 0
         self.use_every_n_frames = 1
 
         self.gaussians = None
-        self.cameras = dict()
+        self.cameras = dict() #保存所有的相机视角
         self.device = "cuda:0"
         self.pause = False
 
@@ -55,20 +55,26 @@ class FrontEnd(mp.Process):
         self.single_thread = self.config["Training"]["single_thread"]
 
     def add_new_keyframe(self, cur_frame_idx, depth=None, opacity=None, init=False):
-        rgb_boundary_threshold = self.config["Training"]["rgb_boundary_threshold"]
+        rgb_boundary_threshold = self.config["Training"]["rgb_boundary_threshold"] #从配置中获取 RGB 边界阈值。
+        # 将当前帧索引添加到关键帧索引列表中。
         self.kf_indices.append(cur_frame_idx)
+        # 获取当前帧的视角信息。
         viewpoint = self.cameras[cur_frame_idx]
+        # 获取当前视角的原始图像 gt_img。用于进行训练的吧？
         gt_img = viewpoint.original_image.cuda()
+        # 计算图像中 RGB 像素值的和，然后与 RGB 边界阈值进行比较，得到有效的 RGB 像素值。
         valid_rgb = (gt_img.sum(dim=0) > rgb_boundary_threshold)[None]
-        if self.monocular:
-            if depth is None:
+        if self.monocular:#如果系统是单目系统
+            if depth is None:#如果不提供深度图
+                # 初始化深度为一个固定值，并添加一些噪声
                 initial_depth = 2 * torch.ones(1, gt_img.shape[1], gt_img.shape[2])
                 initial_depth += torch.randn_like(initial_depth) * 0.3
             else:
+                # 根据深度和不透明度信息计算初始深度，并根据有效 RGB 像素值进行掩码。
                 depth = depth.detach().clone()
                 opacity = opacity.detach()
                 use_inv_depth = False
-                if use_inv_depth:
+                if use_inv_depth:#如果使用逆深度，上面给定为false
                     inv_depth = 1.0 / depth
                     inv_median_depth, inv_std, valid_mask = get_median_depth(
                         inv_depth, opacity, mask=valid_rgb, return_std=True
@@ -85,7 +91,7 @@ class FrontEnd(mp.Process):
                         inv_depth
                     ) * torch.where(invalid_depth_mask, inv_std * 0.5, inv_std * 0.2)
                     initial_depth = 1.0 / inv_initial_depth
-                else:
+                else: #根据深度和不透明度信息计算初始深度，并根据有效 RGB 像素值进行掩码。
                     median_depth, std, valid_mask = get_median_depth(
                         depth, opacity, mask=valid_rgb, return_std=True
                     )
@@ -101,29 +107,33 @@ class FrontEnd(mp.Process):
                     )
 
                 initial_depth[~valid_rgb] = 0  # Ignore the invalid rgb pixels
-            return initial_depth.cpu().numpy()[0]
-        # use the observed depth
-        initial_depth = torch.from_numpy(viewpoint.depth).unsqueeze(0)
-        initial_depth[~valid_rgb.cpu()] = 0  # Ignore the invalid rgb pixels
-        return initial_depth[0].numpy()
+            return initial_depth.cpu().numpy()[0] #将深度数据转换为 NumPy 数组并返回。
+        # use the observed depth（若不是单目，那么就使用观测到的深度信息）
+        initial_depth = torch.from_numpy(viewpoint.depth).unsqueeze(0) #从视角中获取深度信息，并将其转换为张量。
+        initial_depth[~valid_rgb.cpu()] = 0  # Ignore the invalid rgb pixels （略无效的 RGB 像素值，并将它们的深度设置为零。）
+        return initial_depth[0].numpy() #将深度数据转换为 NumPy 数组并返回。
 
+    # 初始化SLAM系统
     def initialize(self, cur_frame_idx, viewpoint):
-        self.initialized = not self.monocular
-        self.kf_indices = []
-        self.iteration_count = 0
-        self.occ_aware_visibility = {}
-        self.current_window = []
-        # remove everything from the queues
+        self.initialized = not self.monocular #如果系统不是单目（monocular），则将初始化状态设置为 True，否则为 False。
+        self.kf_indices = [] #初始化关键帧索引列表为空。
+        self.iteration_count = 0 #初始化迭代计数器为 0。
+        self.occ_aware_visibility = {} #初始化一个空字典，用于存储每个关键帧的可见性信息。
+        self.current_window = [] #初始化当前窗口为空，该窗口用于跟踪一系列关键帧。
+
+        # remove everything from the queues (清空队列中的数据：通过一个循环清空后端队列中的所有数据，以确保系统处于干净的状态。)
         while not self.backend_queue.empty():
             self.backend_queue.get()
 
         # Initialise the frame at the ground truth pose
+        # 将当前视角的旋转和平移更新为gt真实姿态。(并放到gpu上)
         viewpoint.update_RT(viewpoint.R_gt, viewpoint.T_gt)
 
-        self.kf_indices = []
+        self.kf_indices = [] #再次将关键帧索引列表清空。
+        # 添加新的关键帧，并生成深度地图。
         depth_map = self.add_new_keyframe(cur_frame_idx, init=True)
-        self.request_init(cur_frame_idx, viewpoint, depth_map)
-        self.reset = False
+        self.request_init(cur_frame_idx, viewpoint, depth_map) #向后端请求初始化，传递当前帧索引、视角信息和深度地图。
+        self.reset = False #重置标志位为 False，表示系统不需要重置。
 
     def tracking(self, cur_frame_idx, viewpoint):
         prev = self.cameras[cur_frame_idx - self.use_every_n_frames]
@@ -381,11 +391,13 @@ class FrontEnd(mp.Process):
                 )
                 viewpoint.compute_grad_mask(self.config) #计算梯度掩码
 
+                # 将当前帧的视角（viewpoint）保存到 self.cameras 中，以便后续使用。
                 self.cameras[cur_frame_idx] = viewpoint
 
-                if self.reset:
-                    self.initialize(cur_frame_idx, viewpoint)
-                    self.current_window.append(cur_frame_idx)
+                # 如果需要重置系统，执行以下操作：
+                if self.reset:#初始化后设置为 False。
+                    self.initialize(cur_frame_idx, viewpoint) #使用当前帧初始化系统
+                    self.current_window.append(cur_frame_idx) #将当前帧索引添加到窗口中，窗口可能用于跟踪一系列关键帧。
                     cur_frame_idx += 1
                     continue
 

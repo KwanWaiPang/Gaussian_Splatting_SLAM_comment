@@ -29,7 +29,7 @@ Training:
   gaussian_extent: 1.0
   gaussian_reset: 2001
   size_threshold: 20
-  kf_interval: 5
+  kf_interval: 5 # 计算当前帧与上一个关键帧之间的时间间隔(关键帧间隔)
   window_size: 8
   pose_window: 3
   edge_threshold: 1.1
@@ -37,7 +37,7 @@ Training:
 
   kf_translation: 0.08
   kf_min_translation: 0.05
-  kf_overlap: 0.9
+  kf_overlap: 0.9  #关键帧之间的重叠度，小于这个值就会生成新的关键帧
   kf_cutoff: 0.3
   prune_mode: 'slam'
   single_thread: False #自动采用多线程？？？

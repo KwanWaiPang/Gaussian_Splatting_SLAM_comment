@@ -54,7 +54,7 @@ class SLAM:
         # sh系数
         model_params.sh_degree = 3 if self.use_spherical_harmonics else 0
 
-        # 初始化高斯模型
+        # 初始化高斯模型（并设置一些列参数）
         self.gaussians = GaussianModel(model_params.sh_degree, config=self.config)
         self.gaussians.init_lr(6.0) #初始化高斯模型的学习率（空间学习率）
 

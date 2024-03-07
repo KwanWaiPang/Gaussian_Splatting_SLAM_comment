@@ -1,4 +1,4 @@
 inherit_from: "configs/rgbd/replica/base_config.yaml"
 Dataset:
-  dataset_path: "datasets/replica/office0/"
+  dataset_path: "datasets/Replica/office0/" #数据集路径(原本的给是不对的～)
   single_thread: True

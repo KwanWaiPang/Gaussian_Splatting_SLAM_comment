@@ -22,8 +22,8 @@ from gaussian_splatting.utils.sh_utils import eval_sh
 
 
 def render(
-    viewpoint_camera,
-    pc: GaussianModel,
+    viewpoint_camera, #数据输入的所有信息
+    pc: GaussianModel, #高斯模型
     pipe,
     bg_color: torch.Tensor,
     scaling_modifier=1.0,
@@ -37,24 +37,27 @@ def render(
     """
 
     # Create zero tensor. We will use it to make pytorch return gradients of the 2D (screen-space) means
+    # 检查是否有点云数据
     if pc.get_xyz.shape[0] == 0:
         return None
 
+    #  创建一个与输入点云相同大小的零张量
     screenspace_points = (
-        torch.zeros_like(
+        torch.zeros_like( #创建一个与指定张量相同大小的零张量。
             pc.get_xyz, dtype=pc.get_xyz.dtype, requires_grad=True, device="cuda"
         )
         + 0
     )
     try:
-        screenspace_points.retain_grad()
+        screenspace_points.retain_grad() #保留张量的梯度信息。在 PyTorch 中，当需要对张量进行梯度计算时，通常会使用 retain_grad() 方法来确保在反向传播过程中梯度信息不会丢失。
     except Exception:
         pass
 
-    # Set up rasterization configuration
+    # Set up rasterization configuration（设置视场角）
     tanfovx = math.tan(viewpoint_camera.FoVx * 0.5)
     tanfovy = math.tan(viewpoint_camera.FoVy * 0.5)
 
+    # 创建光栅化设置
     raster_settings = GaussianRasterizationSettings(
         image_height=int(viewpoint_camera.image_height),
         image_width=int(viewpoint_camera.image_width),
@@ -70,12 +73,13 @@ def render(
         prefiltered=False,
         debug=False,
     )
-
+    
+    # 基于光栅化的设置来创建光栅化器
     rasterizer = GaussianRasterizer(raster_settings=raster_settings)
 
-    means3D = pc.get_xyz
-    means2D = screenspace_points
-    opacity = pc.get_opacity
+    means3D = pc.get_xyz #获取点云数据的三维坐标，存储在 means3D 中。
+    means2D = screenspace_points #获取屏幕坐标，存储在 means2D 中（也就是光栅化后2D的坐标）。
+    opacity = pc.get_opacity #获取不透明度
 
     # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
     # scaling / rotation by the rasterizer.

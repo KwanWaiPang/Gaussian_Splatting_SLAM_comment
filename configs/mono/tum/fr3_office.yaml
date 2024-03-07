@@ -1,8 +1,8 @@
 inherit_from: "configs/mono/tum/base_config.yaml"
 
 Dataset:
-  # dataset_path: "datasets/tum/rgbd_dataset_freiburg3_long_office_household"
-  dataset_path: "/home/gwp/SplaTAM/data/TUM_RGBD/rgbd_dataset_freiburg3_long_office_household"
+  dataset_path: "datasets/tum/rgbd_dataset_freiburg3_long_office_household"
+  # dataset_path: "/home/gwp/SplaTAM/data/TUM_RGBD/rgbd_dataset_freiburg3_long_office_household"
   Calibration:
     fx: 535.4
     fy: 539.2

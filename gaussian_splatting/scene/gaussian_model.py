@@ -36,7 +36,7 @@ class GaussianModel:
         self.active_sh_degree = 0
         self.max_sh_degree = sh_degree
 
-        self._xyz = torch.empty(0, device="cuda")
+        self._xyz = torch.empty(0, device="cuda") #创建一个空的张量，用于存储高斯球的坐标
         self._features_dc = torch.empty(0, device="cuda")
         self._features_rest = torch.empty(0, device="cuda")
         self._scaling = torch.empty(0, device="cuda")

@@ -36,7 +36,7 @@ class FrontEnd(mp.Process):
         self.reset = True #系统是否要重置，初始化后设置为 False。
         self.requested_init = False
         self.requested_keyframe = 0
-        self.use_every_n_frames = 1
+        self.use_every_n_frames = 1 #每隔多少帧使用一次
 
         self.gaussians = None
         self.cameras = dict() #保存所有的相机视角
@@ -136,10 +136,10 @@ class FrontEnd(mp.Process):
         self.reset = False #重置标志位为 False，表示系统不需要重置。
 
     def tracking(self, cur_frame_idx, viewpoint):
-        prev = self.cameras[cur_frame_idx - self.use_every_n_frames]
-        viewpoint.update_RT(prev.R, prev.T)
+        prev = self.cameras[cur_frame_idx - self.use_every_n_frames] #从当前帧往回倒退 self.use_every_n_frames(设置为1就是每帧都使用) 帧，获取前一帧的相机信息作为参考。
+        viewpoint.update_RT(prev.R, prev.T) #使用前一帧的旋转矩阵和平移向量来更新当前帧的相机旋转和平移。（此时为上一帧的pose）
 
-        opt_params = []
+        opt_params = []#创建一个空列表，用于存储优化器的参数。
         opt_params.append(
             {
                 "params": [viewpoint.cam_rot_delta],
@@ -169,8 +169,11 @@ class FrontEnd(mp.Process):
             }
         )
 
+        # 用 Adam 优化器来优化相机的姿态参数。
         pose_optimizer = torch.optim.Adam(opt_params)
+        # 循环执行跟踪迭代次数。
         for tracking_itr in range(self.tracking_itr_num):
+            #  调用 render 函数，生成渲染的图像、深度和不透明度信息。
             render_pkg = render(
                 viewpoint, self.gaussians, self.pipeline_params, self.background
             )
@@ -179,17 +182,18 @@ class FrontEnd(mp.Process):
                 render_pkg["depth"],
                 render_pkg["opacity"],
             )
-            pose_optimizer.zero_grad()
+            pose_optimizer.zero_grad() #梯度清零。
+            # 计算跟踪过程中的损失函数。
             loss_tracking = get_loss_tracking(
                 self.config, image, depth, opacity, viewpoint
             )
-            loss_tracking.backward()
+            loss_tracking.backward()#反向传播，计算梯度。
 
             with torch.no_grad():
-                pose_optimizer.step()
-                converged = update_pose(viewpoint)
+                pose_optimizer.step() #更新参数，尝试使损失函数最小化。
+                converged = update_pose(viewpoint) #更新相机的姿态。
 
-            if tracking_itr % 10 == 0:
+            if tracking_itr % 10 == 0: #每隔10次迭代，将当前帧的信息传递给gui。发送到 q_main2vis 队列中，用于可视化。
                 self.q_main2vis.put(
                     gui_utils.GaussianPacket(
                         current_frame=viewpoint,
@@ -199,11 +203,11 @@ class FrontEnd(mp.Process):
                         else np.zeros((viewpoint.image_height, viewpoint.image_width)),
                     )
                 )
-            if converged:
+            if converged: #如果收敛了，就退出
                 break
 
-        self.median_depth = get_median_depth(depth, opacity)
-        return render_pkg
+        self.median_depth = get_median_depth(depth, opacity) #计算深度图的中值深度。
+        return render_pkg #返回渲染包（render_pkg），其中包含了渲染的图像、深度和不透明度。
 
     def is_keyframe(
         self,
@@ -400,18 +404,23 @@ class FrontEnd(mp.Process):
                     self.current_window.append(cur_frame_idx) #将当前帧索引添加到窗口中，窗口可能用于跟踪一系列关键帧。
                     cur_frame_idx += 1
                     continue
-
+                
+                # 如果 self.initialized 已经被设置为真（即已经初始化），那么它的值将保持不变；
+                # 如果 self.initialized 尚未被设置为真，但当前窗口中的帧数等于指定的窗口大小，则将 self.initialized 的值设置为真。
                 self.initialized = self.initialized or (
                     len(self.current_window) == self.window_size
                 )
 
                 # Tracking
-                render_pkg = self.tracking(cur_frame_idx, viewpoint)
+                render_pkg = self.tracking(cur_frame_idx, viewpoint) #似乎是获取渲染的结果
 
-                current_window_dict = {}
+                current_window_dict = {} #创建一个空字典，用于存储当前窗口的关键帧。
+                # 将当前窗口的关键帧存储到字典中，键为当前窗口的第一个帧，值为除第一个帧之外的其余帧。
                 current_window_dict[self.current_window[0]] = self.current_window[1:]
+                # 据当前窗口的关键帧索引，获取对应的关键帧摄像机信息。
                 keyframes = [self.cameras[kf_idx] for kf_idx in self.current_window]
 
+                # 将高斯包装对象放入队列 q_main2vis 中，用于可视化。这个包装对象包含克隆的高斯模型、当前帧、关键帧列表和当前窗口的字典。
                 self.q_main2vis.put(
                     gui_utils.GaussianPacket(
                         gaussians=clone_obj(self.gaussians),
@@ -420,44 +429,56 @@ class FrontEnd(mp.Process):
                         kf_window=current_window_dict,
                     )
                 )
-
+                
+                # 如果有请求的关键帧。
                 if self.requested_keyframe > 0:
-                    self.cleanup(cur_frame_idx)
-                    cur_frame_idx += 1
-                    continue
+                    self.cleanup(cur_frame_idx) #清理当前帧
+                    cur_frame_idx += 1 #当前帧索引加一。
+                    continue #跳过当前循环，继续执行下一次循环。
 
-                last_keyframe_idx = self.current_window[0]
+                last_keyframe_idx = self.current_window[0] #获取当前窗口的第一个关键帧索引。
+                # 计算当前帧与上一个关键帧之间的时间间隔是否大于等于关键帧间隔。
                 check_time = (cur_frame_idx - last_keyframe_idx) >= self.kf_interval
+                # 获取当前帧的可见性？？？
                 curr_visibility = (render_pkg["n_touched"] > 0).long()
+                # 根据一些条件判断是否创建关键帧，这些条件包括当前帧索引、上一个关键帧索引、当前帧的可见性以及其他一些参数。
                 create_kf = self.is_keyframe(
                     cur_frame_idx,
                     last_keyframe_idx,
                     curr_visibility,
                     self.occ_aware_visibility,
                 )
+
+                # 如果当前窗口的帧数小于指定的窗口大小，则将当前帧添加到窗口中。
                 if len(self.current_window) < self.window_size:
                     union = torch.logical_or(
                         curr_visibility, self.occ_aware_visibility[last_keyframe_idx]
-                    ).count_nonzero()
+                    ).count_nonzero() #计算当前帧可见性和上一个关键帧的可见性的并集中非零元素的数量。
                     intersection = torch.logical_and(
                         curr_visibility, self.occ_aware_visibility[last_keyframe_idx]
-                    ).count_nonzero()
-                    point_ratio = intersection / union
+                    ).count_nonzero() #计算当前帧可见性和上一个关键帧的可见性的交集中非零元素的数量。
+                    point_ratio = intersection / union #计算交集与并集的比值，表示当前帧在上一个关键帧的可见性范围内的点所占的比例。
+                    # 判断是否需要创建关键帧，条件是当前帧与上一个关键帧之间的时间间隔大于等于关键帧间隔，并且点的比例小于指定的阈值 kf_overlap。
                     create_kf = (
                         check_time
                         and point_ratio < self.config["Training"]["kf_overlap"]
                     )
+
+                # 如果是单线程模式
                 if self.single_thread:
-                    create_kf = check_time and create_kf
+                    create_kf = check_time and create_kf #如果是单线程模式，并且满足时间间隔条件，那么就需要创建关键帧。这段代码的作用是确保在单线程模式下，即使点的比例也符合要求，依然需要创建关键帧。
+
+                # 如果需要创建关键帧 
                 if create_kf:
                     self.current_window, removed = self.add_to_window(
                         cur_frame_idx,
                         curr_visibility,
                         self.occ_aware_visibility,
                         self.current_window,
-                    )
+                    )#调用 add_to_window 方法，将当前帧添加到当前窗口中，并返回更新后的当前窗口和已移除的关键帧（如果有的话）。
+                    # 如果是单目摄像头且地图尚未初始化且已移除了关键帧，则执行以下操作。
                     if self.monocular and not self.initialized and removed is not None:
-                        self.reset = True
+                        self.reset = True #将重置标志设置为True。因为如果地图尚未初始化且已移除了关键帧，那么就需要重置系统，也即需要重新初始化。
                         Log(
                             "Keyframes lacks sufficient overlap to initialize the map, resetting."
                         )
@@ -467,11 +488,11 @@ class FrontEnd(mp.Process):
                         depth=render_pkg["depth"],
                         opacity=render_pkg["opacity"],
                         init=False,
-                    )
+                    ) #调用 add_new_keyframe 方法，根据渲染包的深度和不透明度信息添加新的关键帧。
                     self.request_keyframe(
                         cur_frame_idx, viewpoint, self.current_window, depth_map
-                    )
-                else:
+                    ) #请求添加关键帧。
+                else: #如果不需要创建关键帧，那么就cleanup
                     self.cleanup(cur_frame_idx)
                 cur_frame_idx += 1
 
@@ -481,7 +502,7 @@ class FrontEnd(mp.Process):
                     and create_kf
                     and len(self.kf_indices) % self.save_trj_kf_intv == 0
                 ):
-                    Log("Evaluating ATE at frame: ", cur_frame_idx)
+                    Log("Evaluating ATE at frame: ", cur_frame_idx) #进行ATE评估，并输出当前frame的索引。
                     eval_ate(
                         self.cameras,
                         self.kf_indices,
@@ -495,8 +516,10 @@ class FrontEnd(mp.Process):
                     # throttle at 3fps when keyframe is added
                     duration = tic.elapsed_time(toc)
                     time.sleep(max(0.01, 1.0 / 3.0 - duration / 1000))
-            else:
-                data = self.frontend_queue.get()
+            else:#如果前端队列不为空
+                data = self.frontend_queue.get() #从前端队列中获取数据。
+
+                # 如果数据的第一个元素是 "sync_backend"，则执行以下操作：
                 if data[0] == "sync_backend":
                     self.sync_backend(data)
 

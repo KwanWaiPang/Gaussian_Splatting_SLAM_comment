@@ -364,7 +364,7 @@ class BackEnd(mp.Process):
         msg = [tag, clone_obj(self.gaussians), self.occ_aware_visibility, keyframes]
         self.frontend_queue.put(msg)
 
-    def run(self):
+    def run(self): #开启后端进程
         while True:
             if self.backend_queue.empty():
                 if self.pause:

@@ -4,7 +4,7 @@
 
 <p align="center">
 
-  <h1 align="center"> Gaussian Splatting SLAM (中文注释版~仅供个人学习记录用)
+  <h1 align="center"> Gaussian Splatting SLAM / MonoGS (中文注释版~仅供个人学习记录用)
   </h1>
 
 [comment]: <> (  <h2 align="center">PAPER</h2>)
